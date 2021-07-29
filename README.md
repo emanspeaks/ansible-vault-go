@@ -8,7 +8,7 @@ Go package to read/write Ansible Vault secrets
 ## Installation
 
 ```
-GO111MODULE=on go install github.com/codingtony/ansible-vault-go
+go install github.com/codingtony/ansible-vault-go@latest
 ```
 
 ## Usage (command line)

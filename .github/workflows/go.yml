@@ -38,15 +38,19 @@ jobs:
         LDFLAGS="-s -w -X  "${PACKAGE_NS}"/cmd.version="${VERSION}" -X "${PACKAGE_NS}"/cmd.buildTime=${BUILD_TIME}"
         
         GOARCH=amd64  
-        
-        GOOS=darwin
-        go build -ldflags="${LDFLAGS}" -o "dist/ansible-vault-go_${GOOS}_${GOARCH}"
-        
+
         GOOS=windows 
         go build -ldflags="${LDFLAGS}" -o "dist/ansible-vault-go_${GOOS}_${GOARCH}.exe"
         
         GOOS=linux
         go build -ldflags="${LDFLAGS}" -o "dist/ansible-vault-go_${GOOS}_${GOARCH}"
+        
+        GOOS=darwin
+        go build -ldflags="${LDFLAGS}" -o "dist/ansible-vault-go_${GOOS}_${GOARCH}"
+
+        GOARCH=arm64  
+        go build -ldflags="${LDFLAGS}" -o "dist/ansible-vault-go_${GOOS}_${GOARCH}"
+        
         
         tar -C dist -cvf ansible-vault-go.tar .
 
