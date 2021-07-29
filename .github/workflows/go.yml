@@ -2,7 +2,7 @@ name: Go
 
 on:
   push:
-    branches: [ master ]
+    branches: [ master, fix/workflow_go ]
   pull_request:
     branches: [ master ]
 
@@ -16,49 +16,18 @@ jobs:
     - name: Set up Go 1.x
       uses: actions/setup-go@v2
       with:
-        go-version: ^1.13
+        go-version: ^1.16
 
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
-
-    - name: Get dependencies
-      run: |
-        go mod download
-
-    - name: Test
-      run: go test -v .
+      with:
+        fetch-depth: 0 
 
     - name: Package
-      run: |
-        mkdir dist
-        BUILD_TIME=$(date -Is)
-        PACKAGE_NS="github.com/codingtony/ansible-vault-go"
-        VERSION="1.0.${{ github.run_number }}"
-
-        LDFLAGS="-s -w -X  "${PACKAGE_NS}"/cmd.version="${VERSION}" -X "${PACKAGE_NS}"/cmd.buildTime=${BUILD_TIME}"
-        
-        GOARCH=amd64  
-
-        GOOS=windows 
-        go build -ldflags="${LDFLAGS}" -o "dist/ansible-vault-go_${GOOS}_${GOARCH}.exe"
-        
-        GOOS=linux
-        go build -ldflags="${LDFLAGS}" -o "dist/ansible-vault-go_${GOOS}_${GOARCH}"
-        
-        GOOS=darwin
-        go build -ldflags="${LDFLAGS}" -o "dist/ansible-vault-go_${GOOS}_${GOARCH}"
-
-        GOARCH=arm64  
-        go build -ldflags="${LDFLAGS}" -o "dist/ansible-vault-go_${GOOS}_${GOARCH}"
-        
-        
-        tar -C dist -cvf ansible-vault-go.tar .
-
-
-    - name: Create Artifacts
-      uses: actions/upload-artifact@v2
+      uses: goreleaser/goreleaser-action@master
       with:
-        name: ansible-vault-go-1.0.${{ github.run_number }}
-        path: |
-          ansible-vault-go.tar
-          
+        version: latest
+        args: release
+        workdir: ./
+      env:
+        GITHUB_TOKEN: ${{ secrets.GO_RELEASER_GITHUB_TOKEN }}          

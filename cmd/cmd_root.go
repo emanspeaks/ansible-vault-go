@@ -21,8 +21,8 @@ type rootPFlagsStruct struct {
 
 var (
 	// This two variables are set at build time
-	version   string
-	buildTime string
+	Version   string
+	BuildTime string
 
 	// Logger
 	out = loggo.GetLogger("cmd")
@@ -34,7 +34,7 @@ var (
 	rootCmd = &cobra.Command{
 		Use:           "ansible-vault-go",
 		Short:         "Golang port of ansible-vault that can perform basic functions",
-		Version:       fmt.Sprintf("%s (Built on: %s)", version, buildTime),
+		Version:       fmt.Sprintf("%s (Built on: %s)", Version, BuildTime),
 		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			//goland:noinspection GoUnhandledErrorResult
@@ -55,7 +55,7 @@ var (
 				topLevelCmd = topLevelCmd.Parent()
 			}
 
-			out.Debugf("%s (Built on: %s)", version, buildTime)
+			out.Debugf("%s (Built on: %s)", Version, BuildTime)
 
 			if RootPFlags.passwordFlagValue != "" && RootPFlags.vaultPasswordFile != "" {
 				return fmt.Errorf("vault-password-file and password parameters are mutually exclusive")
