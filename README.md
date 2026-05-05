@@ -6,13 +6,13 @@ command-line tool (`avault`) and an importable Go library.
 Supports Ansible Vault formats **1.1** and **1.2**, including vault IDs (named
 identities backed by separate password files).
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/emanspeaks/ansible-vault-go)](https://goreportcard.com/report/github.com/emanspeaks/ansible-vault-go)
+[![Go Report Card](https://goreportcard.com/badge/github.com/emanspeaks/avault)](https://goreportcard.com/report/github.com/emanspeaks/avault)
 
 ## Installation
 
 ### Binary
 
-Download a pre-built binary from the [releases page](https://github.com/emanspeaks/ansible-vault-go/releases).
+Download a pre-built binary from the [releases page](https://github.com/emanspeaks/avault/releases).
 
 | Platform | File |
 | --- | --- |
@@ -25,7 +25,7 @@ Download a pre-built binary from the [releases page](https://github.com/emanspea
 ### From source
 
 ```sh
-go install github.com/emanspeaks/ansible-vault-go@latest
+go install github.com/emanspeaks/avault@latest
 ```
 
 ---
@@ -175,7 +175,7 @@ cat /tmp/mysecret
 Import the `vault` package into your own Go code.
 
 ```go
-import "github.com/emanspeaks/ansible-vault-go/vault"
+import "github.com/emanspeaks/avault/vault"
 ```
 
 ### Encrypt / decrypt (format 1.1)

@@ -3,7 +3,7 @@ package cmd
 import (
 	"os"
 
-	"github.com/emanspeaks/ansible-vault-go/vault"
+	"github.com/emanspeaks/avault/vault"
 	"github.com/spf13/cobra"
 )
 

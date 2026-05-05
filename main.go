@@ -1,6 +1,6 @@
 package main
 
-import "github.com/emanspeaks/ansible-vault-go/cmd"
+import "github.com/emanspeaks/avault/cmd"
 
 var version string
 var date string
