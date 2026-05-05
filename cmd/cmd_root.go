@@ -2,112 +2,145 @@ package cmd
 
 import (
 	"fmt"
-	"io/ioutil"
+	"log/slog"
 	"os"
 	"strings"
 	"syscall"
 
-	"github.com/juju/loggo"
 	"github.com/spf13/cobra"
-	"golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/term"
 )
+
+type vaultIdentity struct {
+	Label    string
+	Password string
+}
 
 type rootPFlagsStruct struct {
 	Password          string
 	passwordFlagValue string
 	verbose           bool
 	vaultPasswordFile string
+	vaultIDStrings    []string
+	VaultIDs          []*vaultIdentity
 }
 
 var (
-	// This two variables are set at build time
+	// Version and BuildTime are set at build time via -ldflags.
 	Version   string
 	BuildTime string
 
-	// Logger
-	out = loggo.GetLogger("cmd")
+	logLevel = new(slog.LevelVar)
+	out      = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: logLevel}))
 
-	// RootPFlags common flags
+	// RootPFlags holds common flags resolved for every command.
 	RootPFlags = &rootPFlagsStruct{}
 
-	// Command
 	rootCmd = &cobra.Command{
 		Use:           "ansible-vault-go",
-		Short:         "Golang port of ansible-vault that can perform basic functions",
+		Short:         "Golang implementation of ansible-vault encryption/decryption",
 		Version:       fmt.Sprintf("%s (Built on: %s)", Version, BuildTime),
 		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			//goland:noinspection GoUnhandledErrorResult
-			rootLogger := loggo.GetLogger("")
-
 			if RootPFlags.verbose {
-				rootLogger.SetLogLevel(loggo.DEBUG)
-			} else {
-				rootLogger.SetLogLevel(loggo.INFO)
+				logLevel.Set(slog.LevelDebug)
 			}
 
-			topLevelCmd := cmd
-			for {
-				if !topLevelCmd.HasParent() {
-					break
+			out.Debug("build info", "version", Version, "buildTime", BuildTime)
+
+			// Resolve vault IDs.
+			for _, vidStr := range RootPFlags.vaultIDStrings {
+				vid, err := resolveVaultID(vidStr)
+				if err != nil {
+					return err
 				}
-
-				topLevelCmd = topLevelCmd.Parent()
+				RootPFlags.VaultIDs = append(RootPFlags.VaultIDs, vid)
 			}
-
-			out.Debugf("%s (Built on: %s)", Version, BuildTime)
 
 			if RootPFlags.passwordFlagValue != "" && RootPFlags.vaultPasswordFile != "" {
-				return fmt.Errorf("vault-password-file and password parameters are mutually exclusive")
+				return fmt.Errorf("--vault-password-file and --password are mutually exclusive")
 			}
-			if RootPFlags.passwordFlagValue != "" {
+
+			switch {
+			case RootPFlags.passwordFlagValue != "":
 				RootPFlags.Password = RootPFlags.passwordFlagValue
-			}
-			if RootPFlags.vaultPasswordFile != "" {
-				bytePassword, err := ioutil.ReadFile(RootPFlags.vaultPasswordFile)
+			case RootPFlags.vaultPasswordFile != "":
+				data, err := os.ReadFile(RootPFlags.vaultPasswordFile)
 				if err != nil {
 					return err
 				}
-				// Fix line endings to match ansible-vault behavior
-				RootPFlags.Password = strings.TrimRight(strings.TrimRight(string(bytePassword), "\r\n"), "\n")
-			}
-			if RootPFlags.Password == "" {
-				out.Debugf("Password not set by flags. Prompting")
-				//noinspection GoUnhandledErrorResult
-				fmt.Fprint(os.Stderr, "New Vault password: ")
-				bytePassword, err := terminal.ReadPassword(int(syscall.Stdin))
-				fmt.Println()
+				RootPFlags.Password = strings.TrimRight(string(data), "\r\n")
+			case len(RootPFlags.VaultIDs) == 0:
+				// No vault IDs and no explicit password — prompt interactively.
+				fmt.Fprint(os.Stderr, "Vault password: ")
+				raw, err := term.ReadPassword(int(syscall.Stdin))
+				fmt.Fprintln(os.Stderr)
 				if err != nil {
 					return err
 				}
-				RootPFlags.Password = string(bytePassword)
+				RootPFlags.Password = string(raw)
 			}
-			out.Debugf("Vault Password used (between []): [%s]", RootPFlags.Password)
+
+			// When vault IDs are the sole password source, use the first one as the
+			// default for commands that haven't been updated to pick a specific identity.
+			if RootPFlags.Password == "" && len(RootPFlags.VaultIDs) > 0 {
+				RootPFlags.Password = RootPFlags.VaultIDs[0].Password
+			}
+
+			out.Debug("vault configuration ready", "identities", len(RootPFlags.VaultIDs))
 			return nil
 		},
 	}
 )
 
-//goland:noinspection GoUnhandledErrorResult
-func init() {
-	rootCmd.PersistentFlags().
-		BoolVarP(&RootPFlags.verbose, "verbose", "v", false, "enable verbose output. May print sensible information")
-	rootCmd.PersistentFlags().
-		StringVarP(&RootPFlags.passwordFlagValue, "password", "p", "", "ansible-vault password to use")
-	rootCmd.PersistentFlags().
-		StringVar(&RootPFlags.vaultPasswordFile, "vault-password-file", "", "file to read the vault password from (trim end of line)")
+// resolveVaultID parses "label@source" and returns the resolved identity.
+// source may be a file path or the literal string "prompt".
+func resolveVaultID(vidStr string) (*vaultIdentity, error) {
+	parts := strings.SplitN(vidStr, "@", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return nil, fmt.Errorf("--vault-id %q must be in label@source format (source is a file path or 'prompt')", vidStr)
+	}
+	label, source := parts[0], parts[1]
+
+	var password string
+	if source == "prompt" {
+		fmt.Fprintf(os.Stderr, "Vault password (%s): ", label)
+		raw, err := term.ReadPassword(int(syscall.Stdin))
+		fmt.Fprintln(os.Stderr)
+		if err != nil {
+			return nil, fmt.Errorf("reading vault-id %q password: %w", label, err)
+		}
+		password = string(raw)
+	} else {
+		data, err := os.ReadFile(source)
+		if err != nil {
+			return nil, fmt.Errorf("reading vault-id %q source %q: %w", label, source, err)
+		}
+		password = strings.TrimRight(string(data), "\r\n")
+	}
+
+	return &vaultIdentity{Label: label, Password: password}, nil
 }
 
-//Execute execute the command
-func Execute() {
-	//goland:noinspection GoUnhandledErrorResult
-	err := rootCmd.Execute()
+func init() {
+	rootCmd.PersistentFlags().
+		BoolVarP(&RootPFlags.verbose, "verbose", "v", false, "enable verbose output (may print sensitive information)")
+	rootCmd.PersistentFlags().
+		StringVarP(&RootPFlags.passwordFlagValue, "password", "p", "", "vault password")
+	rootCmd.PersistentFlags().
+		StringVar(&RootPFlags.vaultPasswordFile, "vault-password-file", "", "read vault password from file")
+	rootCmd.PersistentFlags().
+		StringArrayVar(&RootPFlags.vaultIDStrings, "vault-id", nil,
+			"vault identity in label@source format (source = file path or 'prompt'); may be repeated")
+}
 
-	if err != nil {
+// Execute runs the root command.
+func Execute() {
+	if err := rootCmd.Execute(); err != nil {
 		if RootPFlags.verbose {
-			out.Errorf("%v", err)
+			out.Error("command failed", "err", err)
 		} else {
-			out.Errorf("%s", err.Error())
+			out.Error(err.Error())
 		}
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestEncrypt(t *testing.T) {
@@ -18,6 +19,26 @@ func TestEncrypt(t *testing.T) {
 	result, err = Encrypt("test", "password")
 	assert.NoError(t, err)
 	assert.Contains(t, result, "$ANSIBLE_VAULT;1.1;AES256")
+}
+
+func TestEncryptWithID(t *testing.T) {
+	result, err := EncryptWithID("test", "", "master")
+	assert.Equal(t, ErrEmptyPassword, err)
+	assert.Equal(t, "", result)
+
+	result, err = EncryptWithID("test", "password", "master")
+	assert.NoError(t, err)
+	assert.Contains(t, result, "$ANSIBLE_VAULT;1.2;AES256;master")
+
+	result, err = EncryptWithID("test", "password", "become")
+	assert.NoError(t, err)
+	assert.Contains(t, result, "$ANSIBLE_VAULT;1.2;AES256;become")
+
+	// Empty vault ID falls back to 1.1 format
+	result, err = EncryptWithID("test", "password", "")
+	assert.NoError(t, err)
+	assert.Contains(t, result, "$ANSIBLE_VAULT;1.1;AES256")
+	assert.NotContains(t, result, "1.2")
 }
 
 func TestDecrypt(t *testing.T) {
@@ -72,4 +93,42 @@ func TestEncryptDecrypt(t *testing.T) {
 	result, err = Decrypt(result, "password")
 	assert.NoError(t, err)
 	assert.Equal(t, "test\n", result)
+}
+
+func TestEncryptDecryptWithID(t *testing.T) {
+	const plaintext = "my secret value\n"
+	const password = "vaultpassword"
+	const vaultID = "master"
+
+	encrypted, err := EncryptWithID(plaintext, password, vaultID)
+	require.NoError(t, err)
+	assert.Contains(t, encrypted, "$ANSIBLE_VAULT;1.2;AES256;master")
+
+	decrypted, err := Decrypt(encrypted, password)
+	require.NoError(t, err)
+	assert.Equal(t, plaintext, decrypted)
+}
+
+func TestReadVaultID(t *testing.T) {
+	v11 := `$ANSIBLE_VAULT;1.1;AES256
+aabbcc`
+	id, err := ReadVaultID(v11)
+	assert.NoError(t, err)
+	assert.Equal(t, "", id)
+
+	v12 := `$ANSIBLE_VAULT;1.2;AES256;master
+aabbcc`
+	id, err = ReadVaultID(v12)
+	assert.NoError(t, err)
+	assert.Equal(t, "master", id)
+
+	v12noLabel := `$ANSIBLE_VAULT;1.2;AES256
+aabbcc`
+	id, err = ReadVaultID(v12noLabel)
+	assert.NoError(t, err)
+	assert.Equal(t, "", id)
+
+	invalid := `not a vault file`
+	_, err = ReadVaultID(invalid)
+	assert.Equal(t, ErrInvalidFormat, err)
 }

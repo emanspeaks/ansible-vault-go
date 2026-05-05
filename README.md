@@ -1,127 +1,234 @@
 # ansible-vault-go
 
-Go package to read/write Ansible Vault secrets
+A Go implementation of Ansible Vault encryption and decryption, usable as both a
+command-line tool and an importable Go library.
 
-[![GoDoc](https://godoc.org/github.com/sosedoff/ansible-vault-go?status.svg)](https://godoc.org/github.com/sosedoff/ansible-vault-go)
-[![Go Report Card](https://goreportcard.com/badge/github.com/sosedoff/ansible-vault-go)](https://goreportcard.com/report/github.com/sosedoff/ansible-vault-go)
+Supports Ansible Vault formats **1.1** and **1.2**, including vault IDs (named
+identities backed by separate password files).
+
+[![Go Report Card](https://goreportcard.com/badge/github.com/emanspeaks/ansible-vault-go)](https://goreportcard.com/report/github.com/emanspeaks/ansible-vault-go)
 
 ## Installation
 
-```
-go install github.com/codingtony/ansible-vault-go@latest
+### Binary
+
+Download a pre-built binary from the [releases page](https://github.com/emanspeaks/ansible-vault-go/releases).
+
+### From source
+
+```sh
+go install github.com/emanspeaks/ansible-vault-go@latest
 ```
 
-## Usage (command line)
+---
 
-### Flags for all commands
+## Command-line usage
 
-| Parameter | Description |
-| ---- | ---- |
-| `--password`, `-p` | Provide a password on the command line |
-| `--ansible-vault-file` | Provide a password file |
-| `--verbose`  | Debug output. Beware as it can contain sensible information |
+### Global flags
 
-If password flags are not provided, the user will be prompted for a vault password.
+These flags are accepted by every command.
 
-### Example : encrypt a file
+| Flag | Short | Description |
+| --- | --- | --- |
+| `--vault-id label@source` | | Vault identity: `source` is a file path or `prompt`. May be repeated. |
+| `--vault-password-file path` | | Read a single password from a file (no vault ID label). |
+| `--password value` | `-p` | Provide the password directly on the command line. |
+| `--verbose` | `-v` | Enable debug logging. May print sensitive values. |
 
-Encrypt a file. Prompting for vault password.
-```
-ansible-vault-go encrypt /tmp/file_to_encrypt
-```
-Encrypt a file. Providing vault password file.
-```
-ansible-vault-go encrypt --ansible-vault-file /tmp/password_file /tmp/file_to_encrypt
-```
-Encrypt a file. Providing vault password as parameter.
-```
-ansible-vault-go encrypt -p"vault_password" /tmp/file_to_encrypt
+`--vault-id` and `--vault-password-file` / `--password` may be combined; the
+latter two act as an unlabelled fallback.
+
+---
+
+### Vault IDs
+
+Ansible Vault format 1.2 embeds a label in the header line:
+
+```text
+$ANSIBLE_VAULT;1.2;AES256;master
 ```
 
-### Example : decrypt a file
+This lets you maintain separate password files per identity (e.g. `master`,
+`become`) and have the tool automatically use the right one when decrypting.
 
-Decrypt a file. Prompting for vault password.
-```
-ansible-vault-go decrypt /tmp/file_to_encrypt
-```
-Decrypt a file. Providing vault password file.
-```
-ansible-vault-go decrypt --ansible-vault-file /tmp/password_file /tmp/file_to_encrypt
-```
-Decrypt a file. Providing vault password as parameter.
-```
-ansible-vault-go decrypt -p"vault_password" /tmp/file_to_encrypt
-```
-### Example : generate random content and encrypt it
+The `--vault-id` flag follows the same `label@source` convention as
+`ansible-vault`:
 
-This command is to generate a random alphanumeric string of length specified by the `--length` (or `-l` for short)  parameter. Default length is 32
+```sh
+# source is a file path
+--vault-id master@~/.vault/master.key
 
+# source is an interactive prompt
+--vault-id master@prompt
 ```
-ansible-vault-go random_text_encrypt -p"test" -l 40
+
+---
+
+### `encrypt`
+
+Encrypts a file in place.
+
+```sh
+# Interactive password prompt — produces format 1.1
+ansible-vault-go encrypt secrets.yml
+
+# Explicit password file — format 1.1
+ansible-vault-go encrypt --vault-password-file ~/.vault/password secrets.yml
+
+# Vault ID — produces format 1.2 with label embedded in the header
+ansible-vault-go encrypt --vault-id master@~/.vault/master.key secrets.yml
+
+# Specify which identity to use when multiple --vault-id flags are present
+ansible-vault-go encrypt \
+  --vault-id master@~/.vault/master.key \
+  --vault-id become@~/.vault/become.key \
+  --encrypt-vault-id master \
+  secrets.yml
+```
+
+The `--encrypt-vault-id` flag names which identity to use for encryption. When
+it is omitted and `--vault-id` flags are present, the first one is used.
+
+#### `encrypt` flags
+
+| Flag | Description |
+| --- | --- |
+| `--encrypt-vault-id label` | Identity label to use for encryption (must match a `--vault-id` label). |
+
+---
+
+### `decrypt`
+
+Decrypts a file in place.
+
+```sh
+# Interactive password prompt
+ansible-vault-go decrypt secrets.yml
+
+# Explicit password file
+ansible-vault-go decrypt --vault-password-file ~/.vault/password secrets.yml
+
+# Single vault ID
+ansible-vault-go decrypt --vault-id master@~/.vault/master.key secrets.yml
+
+# Multiple vault IDs — the tool matches the label in the file header automatically
+ansible-vault-go decrypt \
+  --vault-id master@~/.vault/master.key \
+  --vault-id become@~/.vault/become.key \
+  secrets.yml
+```
+
+When multiple `--vault-id` flags are provided, the tool reads the label from the
+file's header and tries the matching identity first. If no label matches (e.g.
+for a format 1.1 file), the first identity is used.
+
+---
+
+### `random_text_encrypt`
+
+Generates a random alphanumeric string, encrypts it, and prints the ciphertext
+to stdout.
+
+```sh
+# Default length 32, interactive prompt
+ansible-vault-go random_text_encrypt
+
+# Length 40, inline password
+ansible-vault-go random_text_encrypt -p mypassword -l 40
+```
+
+Output:
+
+```text
 $ANSIBLE_VAULT;1.1;AES256
 34326565633335313262373962333766343264363934633566656564303631356139636164643730
-3634353436353732323364656233653935346637346336340a393730313830623464633437363564
-30316463663835616237393066666663666130343837656432343733333161656363646536346531
-6334613865626431330a353938343833343838633062316433346365346533323031396437666663
-66393636643065346332643134653438393966663662633965383962616633353139666265616531
-3935393937373565396431383237663664336438656534383561
+...
 ```
 
-Full example with decryption
+Pipe to a file and decrypt later:
 
-```
-ansible-vault-go random_text_encrypt --verbose -p"test" -l 40 > /tmp/mysecret
-2020-11-02 13:42:03 DEBUG cmd cmd_root.go:59 
-2020-11-02 13:42:03 DEBUG cmd cmd_root.go:85 Vault Password used (between []): [test]
-2020-11-02 13:42:03 DEBUG cmd cmd_encrypt.go:96 Generated string : iQE6Gll4VsfkDSmC4YCYyg9oxTVIsDtluICNfDcU
-
-cat /tmp/mysecret 
-$ANSIBLE_VAULT;1.1;AES256
-62636266656438356330633735343964336465386639313032633237333435366332386565353037
-3739373635303239376165643432383539623563663231310a353638313964626138666136383630
-36356166343034663739396635323032623564343534363965313137383039313962393663633235
-6133666365396630300a653063613738383532383133653437656536383264343864626265636230
-62626366333431616539316566323834353764396666393464303734313237346338353161363638
-3735336434653133306632313633386537353461393734326433
-
-ansible-vault-go decrypt -p"test"  /tmp/mysecret
-2020-11-02 13:46:06 INFO cmd cmd_decrypt.go:58 Decryption successful
-
-cat /tmp/mysecret 
-iQE6Gll4VsfkDSmC4YCYyg9oxTVIsDtluICNfDcU
+```sh
+ansible-vault-go random_text_encrypt -p mypassword -l 40 > /tmp/mysecret
+ansible-vault-go decrypt -p mypassword /tmp/mysecret
+cat /tmp/mysecret
 ```
 
-## Usage (code)
+#### `random_text_encrypt` flags
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `--length n` | `-l` | Length of the generated string (default: 32). |
+
+---
+
+## Library usage
+
+Import the `vault` package into your own Go code.
 
 ```go
-package main
-
-import(
-  "log"
-
-  "github.com/codingtony/ansible-vault-go/vault"
-)
-
-func main() {
-  // Encrypt secret data
-  str, err := vault.Encrypt("secret", "password")
-
-  // Decrypt secret data
-  str, err := vault.Decrypt("secret", "password")
-
-  // Write secret data to file
-  err := vault.EncryptFile("path/to/secret/file", "secret", "password")
-
-  // Read existing secret
-  str, err := vault.DecryptFile("path/to/secret/file", "password")
-}
+import "github.com/emanspeaks/ansible-vault-go/vault"
 ```
 
-## Reference
+### Encrypt / decrypt (format 1.1)
 
-Check out the Ansible documentation regarding the Vault file format:
+```go
+// Encrypt a string
+ciphertext, err := vault.Encrypt("my secret", "password")
 
-- https://docs.ansible.com/ansible/2.4/vault.html#vault-format
+// Encrypt a byte slice
+ciphertext, err := vault.EncryptByteArray([]byte("my secret"), "password")
+
+// Encrypt and write to a file
+err := vault.EncryptFile("path/to/file", "my secret", "password")
+
+// Decrypt a string
+plaintext, err := vault.Decrypt(ciphertext, "password")
+
+// Decrypt a file
+plaintext, err := vault.DecryptFile("path/to/file", "password")
+```
+
+### Encrypt / decrypt with vault ID (format 1.2)
+
+```go
+// Encrypt with a vault ID label — produces format 1.2 header
+ciphertext, err := vault.EncryptWithID("my secret", "password", "master")
+
+// Encrypt a byte slice with a vault ID
+ciphertext, err := vault.EncryptByteArrayWithID([]byte("my secret"), "password", "master")
+
+// Decrypt works for both 1.1 and 1.2 format automatically
+plaintext, err := vault.Decrypt(ciphertext, "password")
+
+// Read just the vault ID from an encrypted string without decrypting
+vaultID, err := vault.ReadVaultID(ciphertext)
+// vaultID == "master" for format 1.2, "" for format 1.1
+```
+
+### Errors
+
+```go
+vault.ErrEmptyPassword  // password argument was blank
+vault.ErrInvalidFormat  // unrecognised vault header
+vault.ErrInvalidPadding // decryption produced invalid PKCS7 padding (wrong password)
+```
+
+---
+
+## Vault format reference
+
+| Version | Header | Notes |
+| --- | --- | --- |
+| 1.1 | `$ANSIBLE_VAULT;1.1;AES256` | Original format, no vault ID. |
+| 1.2 | `$ANSIBLE_VAULT;1.2;AES256;label` | Adds a vault identity label. |
+
+Both formats use AES-256-CTR encryption with PBKDF2-SHA256 key derivation
+(10 000 iterations) and HMAC-SHA256 authentication, identical to the reference
+Python implementation in Ansible.
+
+See also: [Ansible Vault format documentation](https://docs.ansible.com/ansible/latest/vault_guide/vault_encrypting_content.html)
+
+---
 
 ## License
 

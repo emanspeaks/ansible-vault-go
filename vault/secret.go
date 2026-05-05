@@ -8,12 +8,32 @@ import (
 	"strings"
 )
 
-const vaultHeader = "$ANSIBLE_VAULT;1.1;AES256"
+const (
+	vaultFormatV11 = "$ANSIBLE_VAULT;1.1;AES256"
+	vaultFormatV12 = "$ANSIBLE_VAULT;1.2;AES256"
+	vaultHeader    = vaultFormatV11
+)
 
 type secret struct {
 	salt []byte
 	hmac []byte
 	data []byte
+}
+
+// parseHeader validates and parses the vault header line.
+// Returns the vault ID (empty string for 1.1 format) or ErrInvalidFormat.
+func parseHeader(line string) (string, error) {
+	line = strings.TrimSpace(line)
+	switch {
+	case line == vaultFormatV11:
+		return "", nil
+	case line == vaultFormatV12:
+		return "", nil
+	case strings.HasPrefix(line, vaultFormatV12+";"):
+		return strings.TrimPrefix(line, vaultFormatV12+";"), nil
+	default:
+		return "", ErrInvalidFormat
+	}
 }
 
 func decodeSecret(input string) (*secret, error) {
@@ -27,7 +47,7 @@ func decodeSecret(input string) (*secret, error) {
 		return nil, err
 	}
 
-	hmac, err := hex.DecodeString(lines[1])
+	mac, err := hex.DecodeString(lines[1])
 	if err != nil {
 		return nil, err
 	}
@@ -37,34 +57,31 @@ func decodeSecret(input string) (*secret, error) {
 		return nil, err
 	}
 
-	return &secret{salt, hmac, data}, nil
+	return &secret{salt, mac, data}, nil
 }
 
-func encodeSecret(secret *secret, key *key) (string, error) {
-	hmacEncrypt := hmac.New(sha256.New, key.hmacKey)
-	hmacEncrypt.Write(secret.data)
-	hexSalt := hex.EncodeToString(secret.salt)
-	hexHmac := hmacEncrypt.Sum(nil)
-	hexCipher := hex.EncodeToString(secret.data)
+func encodeSecret(s *secret, k *key, vaultID string) (string, error) {
+	h := hmac.New(sha256.New, k.hmacKey)
+	h.Write(s.data)
 
-	combined := strings.Join([]string{
-		string(hexSalt),
-		hex.EncodeToString([]byte(hexHmac)),
-		string(hexCipher),
+	inner := strings.Join([]string{
+		hex.EncodeToString(s.salt),
+		hex.EncodeToString(h.Sum(nil)),
+		hex.EncodeToString(s.data),
 	}, "\n")
 
-	result := strings.Join([]string{
-		vaultHeader,
-		wrapText(hex.EncodeToString([]byte(combined))),
-	}, "\n")
+	header := vaultFormatV11
+	if vaultID != "" {
+		header = vaultFormatV12 + ";" + vaultID
+	}
 
-	return result, nil
+	return header + "\n" + wrapText(hex.EncodeToString([]byte(inner))), nil
 }
 
-func checkDigest(secret *secret, key *key) error {
-	hash := hmac.New(sha256.New, key.hmacKey)
-	hash.Write(secret.data)
-	if !hmac.Equal(hash.Sum(nil), secret.hmac) {
+func checkDigest(s *secret, k *key) error {
+	h := hmac.New(sha256.New, k.hmacKey)
+	h.Write(s.data)
+	if !hmac.Equal(h.Sum(nil), s.hmac) {
 		return errors.New("invalid password")
 	}
 	return nil
@@ -72,22 +89,20 @@ func checkDigest(secret *secret, key *key) error {
 
 func wrapText(text string) string {
 	src := []byte(text)
-	result := []byte{}
-
-	for i := 0; i < len(src); i++ {
+	result := make([]byte, 0, len(src)+len(src)/80)
+	for i, b := range src {
 		if i > 0 && i%80 == 0 {
 			result = append(result, '\n')
 		}
-		result = append(result, src[i])
+		result = append(result, b)
 	}
-
 	return string(result)
 }
 
 func hexDecode(input string) (string, error) {
 	input = strings.TrimSpace(input)
-	input = strings.Replace(input, "\r", "", -1)
-	input = strings.Replace(input, "\n", "", -1)
+	input = strings.ReplaceAll(input, "\r", "")
+	input = strings.ReplaceAll(input, "\n", "")
 
 	decoded, err := hex.DecodeString(input)
 	if err != nil {

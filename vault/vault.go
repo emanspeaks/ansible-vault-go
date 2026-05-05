@@ -1,26 +1,25 @@
 package vault
 
 import (
-	"crypto/hmac"
-	"crypto/sha256"
 	"errors"
-	"io/ioutil"
+	"os"
 	"strings"
 )
 
 var (
-	// ErrEmptyPassword is returned when password is empty
+	// ErrEmptyPassword is returned when password is empty.
 	ErrEmptyPassword = errors.New("password is blank")
 
-	// ErrInvalidFormat is returned when secret content is not valid
+	// ErrInvalidFormat is returned when the vault content has an unrecognized header.
 	ErrInvalidFormat = errors.New("invalid secret format")
 
-	// ErrInvalidPadding is returned when invalid key is used
+	// ErrInvalidPadding is returned when decryption produces invalid PKCS7 padding.
 	ErrInvalidPadding = errors.New("invalid padding")
 )
 
-// EncryptByteArray encrypts the input []byte with the vault password
-func EncryptByteArray(input []byte, password string) (string, error) {
+// EncryptByteArrayWithID encrypts input using password and embeds vaultID in the header.
+// An empty vaultID produces vault format 1.1; a non-empty vaultID produces format 1.2.
+func EncryptByteArrayWithID(input []byte, password string, vaultID string) (string, error) {
 	if password == "" {
 		return "", ErrEmptyPassword
 	}
@@ -29,53 +28,61 @@ func EncryptByteArray(input []byte, password string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	key := generateKey([]byte(password), salt)
+	k := generateKey([]byte(password), salt)
 
-	// Encrypt the secret content
-	data, err := encrypt(input, salt, key)
+	data, err := encrypt(input, salt, k)
 	if err != nil {
 		return "", err
 	}
 
-	// Hash the secret content
-	hash := hmac.New(sha256.New, key.hmacKey)
-	hash.Write(data)
-	hashSum := hash.Sum(nil)
-
-	// Encode the secret payload
-	return encodeSecret(&secret{data: data, salt: salt, hmac: hashSum}, key)
+	return encodeSecret(&secret{data: data, salt: salt}, k, vaultID)
 }
 
-// Encrypt encrypts the input string with the vault password
+// EncryptWithID encrypts input using password and vault ID (format 1.2 when vaultID non-empty).
+func EncryptWithID(input string, password string, vaultID string) (string, error) {
+	return EncryptByteArrayWithID([]byte(input), password, vaultID)
+}
+
+// EncryptByteArray encrypts the input []byte with the vault password (format 1.1).
+func EncryptByteArray(input []byte, password string) (string, error) {
+	return EncryptByteArrayWithID(input, password, "")
+}
+
+// Encrypt encrypts the input string with the vault password (format 1.1).
 func Encrypt(input string, password string) (string, error) {
 	return EncryptByteArray([]byte(input), password)
 }
 
-// EncryptFile encrypts the input string and saves it into the file
+// EncryptFile encrypts input and writes it to path (format 1.1).
 func EncryptFile(path string, input string, password string) error {
 	result, err := Encrypt(input, password)
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(path, []byte(result), 0666)
+	return os.WriteFile(path, []byte(result), 0o666)
 }
 
-// Decrypt decrypts the input string with the vault password
+// ReadVaultID returns the vault ID from the header of an encrypted vault string.
+// Returns an empty string for format 1.1, the label for format 1.2.
+func ReadVaultID(input string) (string, error) {
+	line, _, _ := strings.Cut(input, "\n")
+	return parseHeader(line)
+}
+
+// Decrypt decrypts the input string with the vault password.
+// Accepts both vault format 1.1 and 1.2.
 func Decrypt(input string, password string) (string, error) {
 	if password == "" {
 		return "", ErrEmptyPassword
 	}
 
 	lines := strings.Split(input, "\n")
-
-	// Valid secret must include header and body
 	if len(lines) < 2 {
 		return "", ErrInvalidFormat
 	}
 
-	// Validate the vault file format
-	if strings.TrimSpace(lines[0]) != vaultHeader {
-		return "", ErrInvalidFormat
+	if _, err := parseHeader(lines[0]); err != nil {
+		return "", err
 	}
 
 	decoded, err := hexDecode(strings.Join(lines[1:], "\n"))
@@ -83,17 +90,17 @@ func Decrypt(input string, password string) (string, error) {
 		return "", err
 	}
 
-	secret, err := decodeSecret(decoded)
+	s, err := decodeSecret(decoded)
 	if err != nil {
 		return "", err
 	}
 
-	key := generateKey([]byte(password), secret.salt)
-	if err := checkDigest(secret, key); err != nil {
+	k := generateKey([]byte(password), s.salt)
+	if err := checkDigest(s, k); err != nil {
 		return "", err
 	}
 
-	result, err := decrypt(secret, key)
+	result, err := decrypt(s, k)
 	if err != nil {
 		return "", err
 	}
@@ -101,9 +108,9 @@ func Decrypt(input string, password string) (string, error) {
 	return result, nil
 }
 
-// DecryptFile decrypts the content of the file with the vault password
+// DecryptFile decrypts the content of path with the vault password.
 func DecryptFile(path string, password string) (string, error) {
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
 	}

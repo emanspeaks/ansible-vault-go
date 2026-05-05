@@ -1,0 +1,140 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  check-exempt:
+    name: Check if all changes are exempt
+    runs-on: ubuntu-latest
+    outputs:
+      all_exempt: ${{ steps.check.outputs.all_exempt }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run exemption check
+        id: check
+        run: |
+          EXEMPTIONS_FILE=".github/workflows/exempt.txt"
+
+          # Compare against the most recent tag to find everything new since the last release.
+          prev_tag=$(git tag --sort=-version:refname | head -1)
+          if [ -n "$prev_tag" ]; then
+            changed_files=$(git diff --name-only "${prev_tag}..HEAD")
+          else
+            changed_files=$(git diff --name-only HEAD^..HEAD)
+          fi
+
+          if [ -z "$changed_files" ]; then
+            echo "all_exempt=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          mapfile -t patterns < <(grep -v '^\s*#' "$EXEMPTIONS_FILE" | grep -v '^\s*$')
+
+          all_exempt=true
+          for f in $changed_files; do
+            matched=false
+            for pat in "${patterns[@]}"; do
+              case "$f" in
+                $pat) matched=true; break ;;
+              esac
+            done
+            if [ "$matched" = false ]; then
+              all_exempt=false
+              break
+            fi
+          done
+
+          echo "all_exempt=${all_exempt}" >> "$GITHUB_OUTPUT"
+
+  release:
+    name: Build and release
+    needs: check-exempt
+    if: needs.check-exempt.outputs.all_exempt != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read version
+        id: ver
+        run: |
+          ver="v$(cat VERSION | tr -d '[:space:]')"
+          echo "tag=${ver}" >> "$GITHUB_OUTPUT"
+          echo "version=${ver}" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Check tag is new
+        run: |
+          if git tag | grep -qx "${{ steps.ver.outputs.tag }}"; then
+            echo "::error::Tag ${{ steps.ver.outputs.tag }} already exists. Bump VERSION to create a new release."
+            exit 1
+          fi
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build linux/amd64
+        env:
+          GOOS: linux
+          GOARCH: amd64
+          CGO_ENABLED: 0
+        run: |
+          go build -trimpath \
+            -ldflags="-s -w -X main.version=${{ steps.ver.outputs.tag }} -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -o ansible-vault-go-linux-amd64 .
+
+      - name: Build linux/arm64
+        env:
+          GOOS: linux
+          GOARCH: arm64
+          CGO_ENABLED: 0
+        run: |
+          go build -trimpath \
+            -ldflags="-s -w -X main.version=${{ steps.ver.outputs.tag }} -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -o ansible-vault-go-linux-arm64 .
+
+      - name: Build darwin/amd64
+        env:
+          GOOS: darwin
+          GOARCH: amd64
+          CGO_ENABLED: 0
+        run: |
+          go build -trimpath \
+            -ldflags="-s -w -X main.version=${{ steps.ver.outputs.tag }} -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -o ansible-vault-go-darwin-amd64 .
+
+      - name: Build darwin/arm64
+        env:
+          GOOS: darwin
+          GOARCH: arm64
+          CGO_ENABLED: 0
+        run: |
+          go build -trimpath \
+            -ldflags="-s -w -X main.version=${{ steps.ver.outputs.tag }} -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -o ansible-vault-go-darwin-arm64 .
+
+      - name: Build windows/amd64
+        env:
+          GOOS: windows
+          GOARCH: amd64
+          CGO_ENABLED: 0
+        run: |
+          go build -trimpath \
+            -ldflags="-s -w -X main.version=${{ steps.ver.outputs.tag }} -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -o ansible-vault-go-windows-amd64.exe .
+
+      - name: Create release ${{ steps.ver.outputs.tag }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          files: ansible-vault-go-*
+          generate_release_notes: true

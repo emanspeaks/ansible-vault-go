@@ -1,10 +1,19 @@
-module github.com/codingtony/ansible-vault-go
+module github.com/emanspeaks/ansible-vault-go
 
-go 1.16
+go 1.26.2
 
 require (
-	github.com/juju/loggo v0.0.0-20210728185423-eebad3a902c4
-	github.com/spf13/cobra v1.2.1
-	github.com/stretchr/testify v1.7.0
-	golang.org/x/crypto v0.0.0-20210711020723-a769d52b0f97
+	github.com/spf13/cobra v1.8.1
+	github.com/stretchr/testify v1.9.0
+	golang.org/x/crypto v0.31.0
+	golang.org/x/term v0.27.0
+)
+
+require (
+	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/spf13/pflag v1.0.5 // indirect
+	golang.org/x/sys v0.28.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
