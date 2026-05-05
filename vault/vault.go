@@ -33,7 +33,7 @@ func EncryptByteArrayWithID(input []byte, password string, vaultID string) (stri
 	}
 	k := generateKey([]byte(password), salt)
 
-	data, err := encrypt(input, salt, k)
+	data, err := encrypt(input, k)
 	if err != nil {
 		return "", err
 	}

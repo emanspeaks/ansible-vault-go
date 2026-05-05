@@ -37,9 +37,8 @@ var (
 	RootPFlags = &rootPFlagsStruct{}
 
 	rootCmd = &cobra.Command{
-		Use:           "ansible-vault-go",
+		Use:           "avault",
 		Short:         "Golang implementation of ansible-vault encryption/decryption",
-		Version:       fmt.Sprintf("%s (Built on: %s)", Version, BuildTime),
 		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			if RootPFlags.verbose {
@@ -122,7 +121,20 @@ func resolveVaultID(vidStr string) (*vaultIdentity, error) {
 	return &vaultIdentity{Label: label, Password: password}, nil
 }
 
+func formatVersion(ver, buildTime string) string {
+	if ver == "" {
+		ver = "dev"
+	}
+	if buildTime == "" {
+		return ver
+	}
+	return ver + " (built: " + buildTime + ")"
+}
+
 func init() {
+	// Pre-declare --version without a shorthand so cobra doesn't claim -v,
+	// which is already used by --verbose.
+	rootCmd.Flags().Bool("version", false, "version for ansible-vault-go")
 	rootCmd.PersistentFlags().
 		BoolVarP(&RootPFlags.verbose, "verbose", "v", false, "enable verbose output (may print sensitive information)")
 	rootCmd.PersistentFlags().
@@ -136,6 +148,10 @@ func init() {
 
 // Execute runs the root command.
 func Execute() {
+	ver := formatVersion(Version, BuildTime)
+	rootCmd.Version = ver
+	rootCmd.Long = "avault " + ver + "\n\n" + rootCmd.Short
+	rootCmd.SetVersionTemplate("avault {{.Version}}\n")
 	if err := rootCmd.Execute(); err != nil {
 		if RootPFlags.verbose {
 			out.Error("command failed", "err", err)

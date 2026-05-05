@@ -1,0 +1,15 @@
+aabbcc
+ansible-vault-go
+davecgh
+fnmatch
+GOARCH
+gopkg
+inconshreveable
+ldflags
+mypassword
+mysecret
+pmezard
+stretchr
+unpad
+
+avault

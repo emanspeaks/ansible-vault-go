@@ -6,7 +6,7 @@ import (
 	"crypto/cipher"
 )
 
-func encrypt(data []byte, salt []byte, key *key) ([]byte, error) {
+func encrypt(data []byte, key *key) ([]byte, error) {
 	aesCipher, err := aes.NewCipher(key.cipherKey)
 	if err != nil {
 		return nil, err

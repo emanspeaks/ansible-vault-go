@@ -1,7 +1,7 @@
-# ansible-vault-go
+# avault
 
 A Go implementation of Ansible Vault encryption and decryption, usable as both a
-command-line tool and an importable Go library.
+command-line tool (`avault`) and an importable Go library.
 
 Supports Ansible Vault formats **1.1** and **1.2**, including vault IDs (named
 identities backed by separate password files).
@@ -13,6 +13,14 @@ identities backed by separate password files).
 ### Binary
 
 Download a pre-built binary from the [releases page](https://github.com/emanspeaks/ansible-vault-go/releases).
+
+| Platform | File |
+| --- | --- |
+| Linux x86-64 | `avault-linux-amd64` |
+| Linux arm64 | `avault-linux-arm64` |
+| macOS x86-64 | `avault-darwin-amd64` |
+| macOS Apple Silicon | `avault-darwin-arm64` |
+| Windows x86-64 | `avault-windows-amd64.exe` |
 
 ### From source
 
@@ -34,9 +42,10 @@ These flags are accepted by every command.
 | `--vault-password-file path` | | Read a single password from a file (no vault ID label). |
 | `--password value` | `-p` | Provide the password directly on the command line. |
 | `--verbose` | `-v` | Enable debug logging. May print sensitive values. |
+| `--version` | | Print version and exit. |
 
 `--vault-id` and `--vault-password-file` / `--password` may be combined; the
-latter two act as an unlabelled fallback.
+latter two act as an unlabeled fallback.
 
 ---
 
@@ -70,16 +79,16 @@ Encrypts a file in place.
 
 ```sh
 # Interactive password prompt — produces format 1.1
-ansible-vault-go encrypt secrets.yml
+avault encrypt secrets.yml
 
 # Explicit password file — format 1.1
-ansible-vault-go encrypt --vault-password-file ~/.vault/password secrets.yml
+avault encrypt --vault-password-file ~/.vault/password secrets.yml
 
 # Vault ID — produces format 1.2 with label embedded in the header
-ansible-vault-go encrypt --vault-id master@~/.vault/master.key secrets.yml
+avault encrypt --vault-id master@~/.vault/master.key secrets.yml
 
 # Specify which identity to use when multiple --vault-id flags are present
-ansible-vault-go encrypt \
+avault encrypt \
   --vault-id master@~/.vault/master.key \
   --vault-id become@~/.vault/become.key \
   --encrypt-vault-id master \
@@ -103,16 +112,16 @@ Decrypts a file in place.
 
 ```sh
 # Interactive password prompt
-ansible-vault-go decrypt secrets.yml
+avault decrypt secrets.yml
 
 # Explicit password file
-ansible-vault-go decrypt --vault-password-file ~/.vault/password secrets.yml
+avault decrypt --vault-password-file ~/.vault/password secrets.yml
 
 # Single vault ID
-ansible-vault-go decrypt --vault-id master@~/.vault/master.key secrets.yml
+avault decrypt --vault-id master@~/.vault/master.key secrets.yml
 
 # Multiple vault IDs — the tool matches the label in the file header automatically
-ansible-vault-go decrypt \
+avault decrypt \
   --vault-id master@~/.vault/master.key \
   --vault-id become@~/.vault/become.key \
   secrets.yml
@@ -131,10 +140,10 @@ to stdout.
 
 ```sh
 # Default length 32, interactive prompt
-ansible-vault-go random_text_encrypt
+avault random_text_encrypt
 
 # Length 40, inline password
-ansible-vault-go random_text_encrypt -p mypassword -l 40
+avault random_text_encrypt -p mypassword -l 40
 ```
 
 Output:
@@ -148,8 +157,8 @@ $ANSIBLE_VAULT;1.1;AES256
 Pipe to a file and decrypt later:
 
 ```sh
-ansible-vault-go random_text_encrypt -p mypassword -l 40 > /tmp/mysecret
-ansible-vault-go decrypt -p mypassword /tmp/mysecret
+avault random_text_encrypt -p mypassword -l 40 > /tmp/mysecret
+avault decrypt -p mypassword /tmp/mysecret
 cat /tmp/mysecret
 ```
 
@@ -209,7 +218,7 @@ vaultID, err := vault.ReadVaultID(ciphertext)
 
 ```go
 vault.ErrEmptyPassword  // password argument was blank
-vault.ErrInvalidFormat  // unrecognised vault header
+vault.ErrInvalidFormat  // unrecognized vault header
 vault.ErrInvalidPadding // decryption produced invalid PKCS7 padding (wrong password)
 ```
 

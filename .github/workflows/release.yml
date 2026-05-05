@@ -90,7 +90,7 @@ jobs:
         run: |
           go build -trimpath \
             -ldflags="-s -w -X main.version=${{ steps.ver.outputs.tag }} -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            -o ansible-vault-go-linux-amd64 .
+            -o avault-linux-amd64 .
 
       - name: Build linux/arm64
         env:
@@ -100,7 +100,7 @@ jobs:
         run: |
           go build -trimpath \
             -ldflags="-s -w -X main.version=${{ steps.ver.outputs.tag }} -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            -o ansible-vault-go-linux-arm64 .
+            -o avault-linux-arm64 .
 
       - name: Build darwin/amd64
         env:
@@ -110,7 +110,7 @@ jobs:
         run: |
           go build -trimpath \
             -ldflags="-s -w -X main.version=${{ steps.ver.outputs.tag }} -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            -o ansible-vault-go-darwin-amd64 .
+            -o avault-darwin-amd64 .
 
       - name: Build darwin/arm64
         env:
@@ -120,7 +120,7 @@ jobs:
         run: |
           go build -trimpath \
             -ldflags="-s -w -X main.version=${{ steps.ver.outputs.tag }} -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            -o ansible-vault-go-darwin-arm64 .
+            -o avault-darwin-arm64 .
 
       - name: Build windows/amd64
         env:
@@ -130,11 +130,11 @@ jobs:
         run: |
           go build -trimpath \
             -ldflags="-s -w -X main.version=${{ steps.ver.outputs.tag }} -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            -o ansible-vault-go-windows-amd64.exe .
+            -o avault-windows-amd64.exe .
 
       - name: Create release ${{ steps.ver.outputs.tag }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
-          files: ansible-vault-go-*
+          files: avault-*
           generate_release_notes: true
