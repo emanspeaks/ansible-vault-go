@@ -90,7 +90,7 @@ jobs:
         run: |
           go build -trimpath \
             -ldflags="-s -w -X main.version=${{ steps.ver.outputs.tag }} -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            -o avault-linux-amd64 .
+            -o avault-${{ steps.ver.outputs.tag }}-linux-amd64 .
 
       - name: Build linux/arm64
         env:
@@ -100,7 +100,7 @@ jobs:
         run: |
           go build -trimpath \
             -ldflags="-s -w -X main.version=${{ steps.ver.outputs.tag }} -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            -o avault-linux-arm64 .
+            -o avault-${{ steps.ver.outputs.tag }}-linux-arm64 .
 
       - name: Build darwin/amd64
         env:
@@ -110,7 +110,7 @@ jobs:
         run: |
           go build -trimpath \
             -ldflags="-s -w -X main.version=${{ steps.ver.outputs.tag }} -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            -o avault-darwin-amd64 .
+            -o avault-${{ steps.ver.outputs.tag }}-darwin-amd64 .
 
       - name: Build darwin/arm64
         env:
@@ -120,7 +120,7 @@ jobs:
         run: |
           go build -trimpath \
             -ldflags="-s -w -X main.version=${{ steps.ver.outputs.tag }} -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            -o avault-darwin-arm64 .
+            -o avault-${{ steps.ver.outputs.tag }}-darwin-arm64 .
 
       - name: Build windows/amd64
         env:
@@ -130,7 +130,7 @@ jobs:
         run: |
           go build -trimpath \
             -ldflags="-s -w -X main.version=${{ steps.ver.outputs.tag }} -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            -o avault-windows-amd64.exe .
+            -o avault-${{ steps.ver.outputs.tag }}-windows-amd64.exe .
 
       - name: Create release ${{ steps.ver.outputs.tag }}
         uses: softprops/action-gh-release@v2
