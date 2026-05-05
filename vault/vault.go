@@ -10,6 +10,9 @@ var (
 	// ErrEmptyPassword is returned when password is empty.
 	ErrEmptyPassword = errors.New("password is blank")
 
+	// ErrInvalidSecret is returned when secret data is not formatted as Ansible secret.
+	ErrInvalidSecret = errors.New("invalid secret")
+
 	// ErrInvalidFormat is returned when the vault content has an unrecognized header.
 	ErrInvalidFormat = errors.New("invalid secret format")
 
@@ -66,7 +69,11 @@ func EncryptFile(path string, input string, password string) error {
 // Returns an empty string for format 1.1, the label for format 1.2.
 func ReadVaultID(input string) (string, error) {
 	line, _, _ := strings.Cut(input, "\n")
-	return parseHeader(line)
+	h, err := parseHeader(line)
+	if err != nil {
+		return "", err
+	}
+	return h.label, nil
 }
 
 // Decrypt decrypts the input string with the vault password.

@@ -8,38 +8,16 @@ import (
 	"strings"
 )
 
-const (
-	vaultFormatV11 = "$ANSIBLE_VAULT;1.1;AES256"
-	vaultFormatV12 = "$ANSIBLE_VAULT;1.2;AES256"
-	vaultHeader    = vaultFormatV11
-)
-
 type secret struct {
 	salt []byte
 	hmac []byte
 	data []byte
 }
 
-// parseHeader validates and parses the vault header line.
-// Returns the vault ID (empty string for 1.1 format) or ErrInvalidFormat.
-func parseHeader(line string) (string, error) {
-	line = strings.TrimSpace(line)
-	switch {
-	case line == vaultFormatV11:
-		return "", nil
-	case line == vaultFormatV12:
-		return "", nil
-	case strings.HasPrefix(line, vaultFormatV12+";"):
-		return strings.TrimPrefix(line, vaultFormatV12+";"), nil
-	default:
-		return "", ErrInvalidFormat
-	}
-}
-
 func decodeSecret(input string) (*secret, error) {
 	lines := strings.SplitN(input, "\n", 3)
 	if len(lines) != 3 {
-		return nil, errors.New("invalid secret")
+		return nil, ErrInvalidSecret
 	}
 
 	salt, err := hex.DecodeString(lines[0])
@@ -70,12 +48,13 @@ func encodeSecret(s *secret, k *key, vaultID string) (string, error) {
 		hex.EncodeToString(s.data),
 	}, "\n")
 
-	header := vaultFormatV11
+	hdr := defaultHeader
 	if vaultID != "" {
-		header = vaultFormatV12 + ";" + vaultID
+		hdr.version = "1.2"
+		hdr.label = vaultID
 	}
 
-	return header + "\n" + wrapText(hex.EncodeToString([]byte(inner))), nil
+	return hdr.String() + "\n" + wrapText(hex.EncodeToString([]byte(inner))), nil
 }
 
 func checkDigest(s *secret, k *key) error {
