@@ -134,7 +134,7 @@ func formatVersion(ver, buildTime string) string {
 func init() {
 	// Pre-declare --version without a shorthand so cobra doesn't claim -v,
 	// which is already used by --verbose.
-	rootCmd.Flags().Bool("version", false, "version for ansible-vault-go")
+	rootCmd.Flags().Bool("version", false, "version for avault")
 	rootCmd.PersistentFlags().
 		BoolVarP(&RootPFlags.verbose, "verbose", "v", false, "enable verbose output (may print sensitive information)")
 	rootCmd.PersistentFlags().

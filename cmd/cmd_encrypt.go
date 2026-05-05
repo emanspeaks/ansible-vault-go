@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/emanspeaks/ansible-vault-go/vault"
+	"github.com/emanspeaks/avault/vault"
 	"github.com/spf13/cobra"
 )
 
 type fileEncryptFlagsStruct struct {
-	file          string
-	password      string
+	file           string
+	password       string
 	encryptVaultID string
 }
 

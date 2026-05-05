@@ -1,5 +1,5 @@
 aabbcc
-ansible-vault-go
+avault
 davecgh
 fnmatch
 GOARCH

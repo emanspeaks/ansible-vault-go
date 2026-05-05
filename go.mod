@@ -1,4 +1,4 @@
-module github.com/emanspeaks/ansible-vault-go
+module github.com/emanspeaks/avault
 
 go 1.26.2
 
