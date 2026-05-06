@@ -11,6 +11,7 @@ import (
 
 type fileEncryptFlagsStruct struct {
 	file           string
+	output         string
 	password       string
 	encryptVaultID string
 }
@@ -26,7 +27,7 @@ var (
 
 	fileEncryptCmd = &cobra.Command{
 		Use:                   "encrypt [flags] [file]",
-		Short:                 "Encrypt a file in place.",
+		Short:                 "Encrypt a file.",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -59,6 +60,9 @@ func init() {
 	fileEncryptCmd.Flags().
 		StringVar(&fileEncryptFlags.encryptVaultID, "encrypt-vault-id", "",
 			"vault identity label to use for encryption (must match a --vault-id label)")
+	fileEncryptCmd.Flags().
+		StringVar(&fileEncryptFlags.output, "output", "",
+			"write encrypted output to this file instead of overwriting the input")
 
 	randomTextEncryptCmd.Flags().
 		IntVarP(&randomTextEncryptFlags.length, "length", "l", 32, "length of generated random text")
@@ -77,7 +81,12 @@ func doEncryptFile(flags *fileEncryptFlagsStruct) error {
 		return err
 	}
 
-	f, err := os.Create(flags.file)
+	outPath := flags.file
+	if flags.output != "" {
+		outPath = flags.output
+	}
+
+	f, err := os.Create(outPath)
 	if err != nil {
 		return err
 	}

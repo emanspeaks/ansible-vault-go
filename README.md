@@ -38,7 +38,8 @@ These flags are accepted by every command.
 
 | Flag | Short | Description |
 | --- | --- | --- |
-| `--vault-id label@source` | | Vault identity: `source` is a file path or `prompt`. May be repeated. |
+| `--vault-id label@source` | | Vault identity: `source` is a password file path or `prompt`. May be repeated. |
+| `--vault-id-list path` | | Read vault identities from a list file containing `label@source` entries. |
 | `--vault-password-file path` | | Read a single password from a file (no vault ID label). |
 | `--password value` | `-p` | Provide the password directly on the command line. |
 | `--verbose` | `-v` | Enable debug logging. May print sensitive values. |
@@ -71,11 +72,56 @@ The `--vault-id` flag follows the same `label@source` convention as
 --vault-id master@prompt
 ```
 
+#### Vault ID list files
+
+Use `--vault-id-list` to load multiple identities from a text file containing
+`label@source` entries. Blank lines and `#`-prefixed lines are ignored.
+Relative paths inside the list file resolve relative to the directory
+containing the list file itself.
+
+A sample list file is included at [examples/vault-id-list.txt](examples/vault-id-list.txt).
+
+The `source` part of a regular `--vault-id label@source` value is never
+interpreted as a list file. It is always treated as either a password file path
+or `prompt`.
+
+`--vault-id-list` and `--vault-id` can be used together. When the same label
+appears in both places, the `--vault-id` value wins. Additional `--vault-id`
+values extend the list.
+
+Example vault-id list file (`~/.vault/ids.txt`):
+
+```text
+# Master password
+master@master.key
+
+# Privilege escalation
+become@./become.key
+```
+
+```sh
+avault --vault-id-list ~/.vault/ids.txt decrypt secrets.yml
+
+# Override one entry from the list and add another
+avault decrypt \
+  --vault-id-list ~/.vault/ids.txt \
+  --vault-id master@~/.vault/override-master.key \
+  --vault-id ci@~/.vault/ci.key \
+  secrets.yml
+```
+
+#### Windows path support
+
+On Windows, Unix-style paths (e.g. `/c/Users/user/.vault/key`) in vault-id
+sources are automatically converted via `cygpath` when available. Tilde
+expansion (`~/...`) is also supported.
+
 ---
 
 ### `encrypt`
 
-Encrypts a file in place.
+Encrypts a file, writing the result to the input file by default. Use `--output`
+to write to a different file instead.
 
 ```sh
 # Interactive password prompt — produces format 1.1
@@ -87,28 +133,35 @@ avault encrypt --vault-password-file ~/.vault/password secrets.yml
 # Vault ID — produces format 1.2 with label embedded in the header
 avault encrypt --vault-id master@~/.vault/master.key secrets.yml
 
-# Specify which identity to use when multiple --vault-id flags are present
+# Load identities from a list file
+avault encrypt --vault-id-list ~/.vault/ids.txt --encrypt-vault-id master secrets.yml
+
+# Specify which identity to use when multiple identities are available
 avault encrypt \
-  --vault-id master@~/.vault/master.key \
-  --vault-id become@~/.vault/become.key \
+  --vault-id-list ~/.vault/ids.txt \
   --encrypt-vault-id master \
   secrets.yml
+
+# Write encrypted output to a separate file
+avault encrypt --vault-id master@~/.vault/master.key -o secrets.yml.enc secrets.yml
 ```
 
 The `--encrypt-vault-id` flag names which identity to use for encryption. When
-it is omitted and `--vault-id` flags are present, the first one is used.
+it is omitted and one or more identities are available, the first one is used.
 
 #### `encrypt` flags
 
 | Flag | Description |
 | --- | --- |
-| `--encrypt-vault-id label` | Identity label to use for encryption (must match a `--vault-id` label). |
+| `--encrypt-vault-id label` | Identity label to use for encryption (must match an available vault identity label). |
+| `--output path` | `-o` Write encrypted output to this file instead of overwriting the input. |
 
 ---
 
 ### `decrypt`
 
-Decrypts a file in place.
+Decrypts a file, writing the result to the input file by default. Use `--output`
+to write to a different file instead.
 
 ```sh
 # Interactive password prompt
@@ -125,11 +178,23 @@ avault decrypt \
   --vault-id master@~/.vault/master.key \
   --vault-id become@~/.vault/become.key \
   secrets.yml
+
+# Load identities from a list file
+avault decrypt --vault-id-list ~/.vault/ids.txt secrets.yml
+
+# Write decrypted output to a separate file
+avault decrypt --vault-id master@~/.vault/master.key -o secrets.plain secrets.yml
 ```
 
 When multiple `--vault-id` flags are provided, the tool reads the label from the
 file's header and tries the matching identity first. If no label matches (e.g.
 for a format 1.1 file), the first identity is used.
+
+#### `decrypt` flags
+
+| Flag | Description |
+| --- | --- |
+| `--output path` | `-o` Write decrypted output to this file instead of overwriting the input. |
 
 ---
 
