@@ -1,0 +1,3 @@
+# Sample vault identities for avault --vault-id-list
+master@master.key
+become@./become.key
