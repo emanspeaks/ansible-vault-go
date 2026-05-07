@@ -119,7 +119,8 @@ func resolveVaultID(vidStr string) ([]*vaultIdentity, error) {
 		source = resolvePath(source)
 		data, err := os.ReadFile(source)
 		if err != nil {
-			return nil, fmt.Errorf("reading vault-id %q source %q: %w", label, source, err)
+			password = ""
+			//return nil, fmt.Errorf("reading vault-id %q source %q: %w", label, source, err)
 		}
 
 		password = strings.TrimRight(string(data), "\r\n")

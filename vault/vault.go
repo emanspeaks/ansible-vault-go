@@ -20,17 +20,39 @@ var (
 	ErrInvalidPadding = errors.New("invalid padding")
 )
 
+// IsEncrypted returns true if content begins with a valid Ansible Vault header.
+func IsEncrypted(content string) bool {
+	line, _, _ := strings.Cut(content, "\n")
+	_, err := parseHeader(line)
+	return err == nil
+}
+
 // EncryptByteArrayWithID encrypts input using password and embeds vaultID in the header.
 // An empty vaultID produces vault format 1.1; a non-empty vaultID produces format 1.2.
 func EncryptByteArrayWithID(input []byte, password string, vaultID string) (string, error) {
+	return encryptWithSalt(input, password, vaultID, nil)
+}
+
+// EncryptByteArrayWithIDAndSalt is like EncryptByteArrayWithID but uses a caller-supplied
+// salt for deterministic output. Providing the same salt, password, and plaintext always
+// produces identical ciphertext, which makes re-encryption idempotent.
+func EncryptByteArrayWithIDAndSalt(input []byte, password, vaultID string, salt []byte) (string, error) {
+	return encryptWithSalt(input, password, vaultID, salt)
+}
+
+func encryptWithSalt(input []byte, password, vaultID string, salt []byte) (string, error) {
 	if password == "" {
 		return "", ErrEmptyPassword
 	}
 
-	salt, err := generateRandomBytes(saltLength)
-	if err != nil {
-		return "", err
+	if salt == nil {
+		var err error
+		salt, err = generateRandomBytes(saltLength)
+		if err != nil {
+			return "", err
+		}
 	}
+
 	k := generateKey([]byte(password), salt)
 
 	data, err := encrypt(input, k)
