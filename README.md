@@ -144,17 +144,41 @@ avault encrypt \
 
 # Write encrypted output to a separate file
 avault encrypt --vault-id master@~/.vault/master.key -o secrets.yml.enc secrets.yml
+
+# Fixed salt — same plaintext + password + salt always produces identical ciphertext
+avault encrypt --vault-password-file ~/.vault/password --salt mysaltstring secrets.yml
+
+# Force re-encryption even if the output is already up to date
+avault encrypt --vault-password-file ~/.vault/password --force secrets.yml
 ```
 
 The `--encrypt-vault-id` flag names which identity to use for encryption. When
 it is omitted and one or more identities are available, the first one is used.
+
+#### Idempotency
+
+Before encrypting, `avault encrypt` checks whether the output file already
+exists and is a valid vault file. If it is, the tool decrypts it (using the
+same identity that would be used to encrypt if it cannot be determined
+automatically) and compares the result against
+the incoming plaintext. When they match, the file is left unchanged and the
+command exits successfully — no unnecessary re-encryption.
+
+This makes `avault encrypt` safe to call repeatedly in scripts and CI pipelines
+without producing spurious file changes.
+
+Use `--force` to bypass this check and always re-encrypt, or `--salt` to make
+repeated encryptions produce byte-for-byte identical output (useful for
+deterministic builds or change-detection workflows).
 
 #### `encrypt` flags
 
 | Flag | Description |
 | --- | --- |
 | `--encrypt-vault-id label` | Identity label to use for encryption (must match an available vault identity label). |
-| `--output path` | `-o` Write encrypted output to this file instead of overwriting the input. |
+| `--output path` | Write encrypted output to this file instead of overwriting the input. |
+| `--salt value` | Fixed salt for deterministic encryption. The same salt + password + plaintext always produces identical ciphertext. Omit to use a random salt (default, more secure). |
+| `--force` | Always re-encrypt, skipping the idempotency check against the existing output file. |
 
 ---
 
@@ -187,8 +211,10 @@ avault decrypt --vault-id master@~/.vault/master.key -o secrets.plain secrets.ym
 ```
 
 When multiple `--vault-id` flags are provided, the tool reads the label from the
-file's header and tries the matching identity first. If no label matches (e.g.
-for a format 1.1 file), the first identity is used.
+file's header and uses the matching identity. If the file carries a vault ID
+label that does not match any supplied identity, decryption fails with an error.
+Format 1.1 files (no label) use the password supplied via `--password` /
+`--vault-password-file` as a fallback.
 
 #### `decrypt` flags
 
@@ -271,12 +297,18 @@ ciphertext, err := vault.EncryptWithID("my secret", "password", "master")
 // Encrypt a byte slice with a vault ID
 ciphertext, err := vault.EncryptByteArrayWithID([]byte("my secret"), "password", "master")
 
+// Encrypt with a fixed salt for deterministic output
+ciphertext, err := vault.EncryptByteArrayWithIDAndSalt([]byte("my secret"), "password", "master", []byte("mysalt"))
+
 // Decrypt works for both 1.1 and 1.2 format automatically
 plaintext, err := vault.Decrypt(ciphertext, "password")
 
 // Read just the vault ID from an encrypted string without decrypting
 vaultID, err := vault.ReadVaultID(ciphertext)
 // vaultID == "master" for format 1.2, "" for format 1.1
+
+// Check whether a string is a valid vault-encrypted blob without decrypting
+ok := vault.IsEncrypted(ciphertext)
 ```
 
 ### Errors

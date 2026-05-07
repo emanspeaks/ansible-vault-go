@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/emanspeaks/avault/vault"
@@ -48,6 +49,9 @@ func doDecryptFile(flags *fileDecryptFlagsStruct) error {
 	if err != nil {
 		return err
 	}
+	if password == "" {
+		return fmt.Errorf("no password provided for decryption")
+	}
 
 	plaintext, err := vault.Decrypt(content, password)
 	if err != nil {
@@ -93,7 +97,6 @@ func resolveDecryptPassword(content, fallback string) (string, error) {
 		}
 	}
 
-	// No label match: use the first available identity (handles 1.1 format or
-	// files where the label wasn't passed on the command line).
-	return RootPFlags.VaultIDs[0].Password, nil
+	// No label match: don't return a password and return an error.
+	return "", fmt.Errorf("no vault-id matching content's vault ID %q", vaultID)
 }

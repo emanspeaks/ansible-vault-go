@@ -14,6 +14,8 @@ type fileEncryptFlagsStruct struct {
 	output         string
 	password       string
 	encryptVaultID string
+	salt           string
+	force          bool
 }
 
 type randomTextEncryptFlagsStruct struct {
@@ -63,6 +65,12 @@ func init() {
 	fileEncryptCmd.Flags().
 		StringVar(&fileEncryptFlags.output, "output", "",
 			"write encrypted output to this file instead of overwriting the input")
+	fileEncryptCmd.Flags().
+		StringVar(&fileEncryptFlags.salt, "salt", "",
+			"fixed salt for deterministic encryption (same salt+password+plaintext always produces identical output)")
+	fileEncryptCmd.Flags().
+		BoolVar(&fileEncryptFlags.force, "force", false,
+			"always re-encrypt, skipping the idempotency check against the existing output file")
 
 	randomTextEncryptCmd.Flags().
 		IntVarP(&randomTextEncryptFlags.length, "length", "l", 32, "length of generated random text")
@@ -76,14 +84,38 @@ func doEncryptFile(flags *fileEncryptFlagsStruct) error {
 
 	label, password := resolveEncryptIdentity(flags.encryptVaultID, flags.password)
 
-	cipher, err := vault.EncryptByteArrayWithID(data, password, label)
-	if err != nil {
-		return err
-	}
-
 	outPath := flags.file
 	if flags.output != "" {
 		outPath = flags.output
+	}
+
+	if !flags.force {
+		if existing, readErr := os.ReadFile(outPath); readErr == nil {
+			existingContent := string(existing)
+			if vault.IsEncrypted(existingContent) {
+				if plaintext, ok := decryptForComparison(existingContent, password); ok {
+					if plaintext == string(data) {
+						out.Info("output already encrypted with matching content, skipping")
+						return nil
+					}
+				}
+			}
+		}
+	}
+
+	var salt []byte
+	if flags.salt != "" {
+		salt = []byte(flags.salt)
+	}
+
+	var cipher string
+	if salt != nil {
+		cipher, err = vault.EncryptByteArrayWithIDAndSalt(data, password, label, salt)
+	} else {
+		cipher, err = vault.EncryptByteArrayWithID(data, password, label)
+	}
+	if err != nil {
+		return err
 	}
 
 	f, err := os.Create(outPath)
@@ -97,6 +129,22 @@ func doEncryptFile(flags *fileEncryptFlagsStruct) error {
 	}
 	out.Info("Encryption successful")
 	return nil
+}
+
+// decryptForComparison attempts to decrypt existingContent to compare against
+// incoming plaintext. It uses the vault-id list to find the right password when
+// the file carries a label, falling back to encryptPassword when there is no
+// label or no matching identity.
+func decryptForComparison(existingContent, encryptPassword string) (string, bool) {
+	pw, err := resolveDecryptPassword(existingContent, encryptPassword)
+	if err != nil || pw == "" {
+		pw = encryptPassword
+	}
+	plaintext, err := vault.Decrypt(existingContent, pw)
+	if err != nil {
+		return "", false
+	}
+	return plaintext, true
 }
 
 func doRandomTextEncrypt(flags *randomTextEncryptFlagsStruct) error {
